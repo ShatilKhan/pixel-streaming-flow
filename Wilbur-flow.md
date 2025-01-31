@@ -1,3 +1,5 @@
+### Updated Event Flow for Wilbur Server
+
 ```mermaid
 sequenceDiagram
     participant S as Streamer
