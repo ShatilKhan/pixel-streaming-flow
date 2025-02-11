@@ -1,5 +1,6 @@
 # pixel-streaming-flow
-Establishing Connection
+
+## Establishing Connection
 
 ```mermaid
 
@@ -57,7 +58,7 @@ sequenceDiagram
 
 
 
-Sending & Receieving Data
+## Sending & Receieving Data
 
 ```mermaid
 sequenceDiagram
