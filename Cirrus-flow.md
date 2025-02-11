@@ -1,4 +1,64 @@
 # pixel-streaming-flow
+Establishing Connection
+
+```mermaid
+
+sequenceDiagram
+    participant S as Streamer
+    participant SS as Signaling Server
+    participant SFU as SFU
+    participant P as Player
+
+    %% Main Server Events with Sub-events
+    rect rgb(200, 220, 240)
+        Note over SS: streamerServer.on('connection')
+        activate SS
+        Note over SS: Sub-events:<br/>- ws.on('message')<br/>- ws.on('close')<br/>- ws.on('error')
+        deactivate SS
+    end
+
+    rect rgb(220, 240, 200)
+        Note over SS: sfuServer.on('connection')
+        activate SS
+        Note over SS: Sub-events:<br/>- ws.on('message')<br/>- ws.on('close')<br/>- ws.on('error')
+        deactivate SS
+    end
+
+    rect rgb(240, 220, 200)
+        Note over SS: playerServer.on('connection')
+        activate SS
+        Note over SS: Sub-events:<br/>- ws.on('message')<br/>- ws.on('close')<br/>- ws.on('error')
+        deactivate SS
+    end
+
+    %% Connection Flow
+    S->>+SS: streamerServer.on('connection')
+    Note right of SS: ws.on('message')
+    Note right of SS: ws.on('close')
+    Note right of SS: ws.on('error')
+    SS->>-S: connection established
+
+    SFU->>+SS: sfuServer.on('connection')
+    Note right of SS: ws.on('message')
+    Note right of SS: ws.on('close')
+    Note right of SS: ws.on('error')
+    SS->>-SFU: connection established
+
+    P->>+SS: playerServer.on('connection')
+    Note right of SS: ws.on('message')
+    Note right of SS: ws.on('close')
+    Note right of SS: ws.on('error')
+    SS->>-P: connection established
+
+    Note over S,P: Each connection type (Streamer, SFU, Player)<br/>has these three sub-events:<br/>1. ws.on('message')<br/>2. ws.on('close')<br/>3. ws.on('error')
+
+```
+
+
+
+
+Sending & Receieving Data
+
 ```mermaid
 sequenceDiagram
     participant S as Streamer
