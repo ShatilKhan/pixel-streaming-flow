@@ -1,125 +1,98 @@
-# pixel-streaming-flow
-
-## Establishing Connection
-
-```mermaid
-
-sequenceDiagram
-    participant S as Streamer
-    participant SS as Signaling Server
-    participant SFU as SFU
-    participant P as Player
-
-    %% Main Server Events with Sub-events
-    rect rgb(200, 220, 240)
-        Note over SS: streamerServer.on('connection')
-        activate SS
-        Note over SS: Sub-events:<br/>- ws.on('message')<br/>- ws.on('close')<br/>- ws.on('error')
-        deactivate SS
-    end
-
-    rect rgb(220, 240, 200)
-        Note over SS: sfuServer.on('connection')
-        activate SS
-        Note over SS: Sub-events:<br/>- ws.on('message')<br/>- ws.on('close')<br/>- ws.on('error')
-        deactivate SS
-    end
-
-    rect rgb(240, 220, 200)
-        Note over SS: playerServer.on('connection')
-        activate SS
-        Note over SS: Sub-events:<br/>- ws.on('message')<br/>- ws.on('close')<br/>- ws.on('error')
-        deactivate SS
-    end
-
-    %% Connection Flow
-    S->>+SS: streamerServer.on('connection')
-    Note right of SS: ws.on('message')
-    Note right of SS: ws.on('close')
-    Note right of SS: ws.on('error')
-    SS->>-S: connection established
-
-    SFU->>+SS: sfuServer.on('connection')
-    Note right of SS: ws.on('message')
-    Note right of SS: ws.on('close')
-    Note right of SS: ws.on('error')
-    SS->>-SFU: connection established
-
-    P->>+SS: playerServer.on('connection')
-    Note right of SS: ws.on('message')
-    Note right of SS: ws.on('close')
-    Note right of SS: ws.on('error')
-    SS->>-P: connection established
-
-    Note over S,P: Each connection type (Streamer, SFU, Player)<br/>has these three sub-events:<br/>1. ws.on('message')<br/>2. ws.on('close')<br/>3. ws.on('error')
-
-```
-
-
-
-
-## Sending & Receieving Data
+# Cirrus Flow
 
 ```mermaid
 sequenceDiagram
     participant S as Streamer
-    participant SS as Signaling Server
+    participant CS as Cirrus Server
     participant SFU as SFU
     participant P as Player
 
     %% Initial Connection Phase
-    S->>SS: WebSocket Connection
-    SS->>S: config
-    SS->>S: identify
-    S->>SS: endpointId
-    SS->>S: endpointIdConfirm
+    S->>CS: 1.WebSocket Connection
+    note over CS,S: Cirrus logs: "Streamer connected: ::1"
+    S->>CS: 2.identify request (type:identify)
+    CS->>S: 3.__LEGACY__ ping (type:ping, time:epoch)
+    CS->>S: 4.__LEGACY__ endpointId (id:DefaultStreamer)
+
+    %% Configuration
+    rect rgb(255, 240, 240)
+        note over CS: Cirrus-specific: Simple Config
+        note over CS: Uses readonly config.json
+        note over CS: No protocol version in logs
+    end
 
     %% SFU Connection (Optional)
-    SFU->>SS: WebSocket Connection
-    SS->>SFU: Auto-subscribe to Streamer
+    SFU->>CS: 5.WebSocket Connection (SFU port 8889)
+    CS->>SFU: 6.Auto-subscribe to Streamer
 
     %% Player Connection & Stream Setup
-    P->>SS: WebSocket Connection
-    SS->>P: config
-    SS->>P: playerCount
-    P->>SS: listStreamers
-    SS->>P: streamerList
-    P->>SS: subscribe
-    SS->>S: playerConnected
-
-    %% WebRTC Negotiation
-    S->>SS: offer
-    SS->>P: offer
-    P->>SS: answer
-    SS->>S: answer
+    P->>CS: 7.WebSocket Connection
+    note over CS,P: Cirrus logs: "player X (::1) connected"
+    CS->>P: 8.playerCount (count:X)
+    P->>CS: 9.listStreamers request
+    CS->>P: 10.streamerList (ids:["DefaultStreamer"])
+    P->>CS: 11.subscribe (streamerId:DefaultStreamer)
     
+    %% Cirrus-specific connection message format
+    rect rgb(255, 240, 240)
+        CS->>S: 12.playerConnected (playerId:"2", dataChannel:true, sfu:false, sendOffer:true)
+    end
+
+    %% Multiple subscribe calls in Cirrus
+    rect rgb(255, 240, 240)
+        P->>CS: 13.subscribe (duplicate call)
+        CS->>S: playerConnected (duplicate notification)
+    end
+    
+    %% WebRTC Negotiation without scalability mode
+    rect rgb(255, 240, 240)
+        S->>CS: 14.offer (with SDP)
+        CS->>P: offer
+        P->>CS: 15.answer (with SDP)
+        CS->>S: answer
+        
+        %% Multiple offer-answer exchanges
+        S->>CS: 16.second offer (with SDP)
+        CS->>P: second offer
+        P->>CS: 17.second answer (with SDP)
+        CS->>S: second answer
+    end
+
     %% ICE Candidate Exchange
-    P->>SS: iceCandidate
-    SS->>S: iceCandidate
-    S->>SS: iceCandidate
-    SS->>P: iceCandidate
+    P->>CS: 18.iceCandidate
+    CS->>S: iceCandidate
+    S->>CS: 19.iceCandidate
+    CS->>P: iceCandidate
 
     %% Streaming & Data Channels
-    Note over S,P: Active Streaming Session
+    Note over S,P: 20.Active Streaming Session
     S-->>P: Media Stream
     P-->>S: Data Channel (Optional)
 
-    %% Disconnect Scenarios
-    opt Player Disconnects
-        P->>SS: Close Connection
-        SS->>S: playerDisconnected
-        SS-->>SFU: playerDisconnected
+    %% Cirrus-specific Logging
+    rect rgb(255, 240, 240)
+        note over CS: Timestamp format: HH:MM:SS.SSS
+        note over CS: Simple direction indicators: ->, <-
+        note over CS: Less structured logging
     end
 
-    opt Streamer Disconnects
-        S->>SS: Close Connection
-        SS->>P: streamerDisconnected
-        SS-->>SFU: streamerDisconnected
+    %% Disconnect Scenarios with specific format
+    opt 21.Player Disconnects
+        P->>CS: Close Connection (code:1001 or 1006)
+        CS->>S: playerDisconnected (playerId:"X")
+        CS->>P: playerCount (count:updated)
     end
 
     %% Health Checks
-    loop Keep Alive
-        S->>SS: ping
-        SS->>S: pong
+    loop 22.Keep Alive
+        S->>CS: ping
+        CS->>S: pong
+    end
+
+    %% Additional Cirrus-Specific Features
+    rect rgb(255, 240, 240)
+        note over CS: Less verbose configuration options
+        note over CS: No protocol versioning visible in logs
+        note over CS: Simple numeric player IDs
     end
 ```
