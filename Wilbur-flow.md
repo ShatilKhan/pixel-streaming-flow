@@ -1,4 +1,4 @@
-### Updated Event Flow for Wilbur Server
+### Event Flow for Wilbur Server
 
 ```mermaid
 sequenceDiagram
@@ -9,34 +9,42 @@ sequenceDiagram
 
     %% Initial Connection Phase
     S->>WS: 1.WebSocket Connection
-    WS->>S: 2.config
-    WS->>S: 3.identify
-    S->>WS: 4.endpointId
-    WS->>S: 5.endpointIdConfirm
+    WS->>S: 2.identify request (type:identify)
+    S->>WS: 3.config (peerConnectionOptions, protocolVersion:1.3.0)
+    WS->>S: 4.endpointId (id:DefaultStreamer, protocolVersion:1.1.0)
+    S->>WS: 5.endpointIdConfirm (committedId:DefaultStreamer)
 
-    %% New Wilbur-Specific Configuration Handling
-    opt Configuration Handling
-        note over S,WS: Configuration handled by CLI options or `config.json`
+    %% Configuration and Health Check
+    rect rgb(240, 240, 255)
+        note over WS: Wilbur-specific: Structured Config
+        note over WS: --log_folder, --log_level_console, etc.
     end
 
     %% SFU Connection (Optional)
-    SFU->>WS: 6.WebSocket Connection
+    SFU->>WS: 6.WebSocket Connection (SFU port 8889)
     WS->>SFU: 7.Auto-subscribe to Streamer
 
     %% Player Connection & Stream Setup
     P->>WS: 8.WebSocket Connection
-    WS->>P: 9.config
-    WS->>P: 10.playerCount
-    P->>WS: 11.listStreamers
-    WS->>P: 12.streamerList
-    P->>WS: 13.subscribe
-    WS->>S: 14.playerConnected
+    note over WS,P: Wilbur logs: "Registered new player: Player0"
+    WS->>P: 9.config (peerConnectionOptions, protocolVersion:1.3.0)
+    P->>WS: 10.listStreamers request
+    WS->>P: 11.streamerList (ids:["DefaultStreamer"])
+    P->>WS: 12.subscribe (streamerId:DefaultStreamer)
+    
+    %% Wilbur-specific connection message format
+    rect rgb(240, 240, 255)
+        WS->>S: 13.playerConnected (playerId:Player0, dataChannel:true, sfu:false)
+    end
 
-    %% WebRTC Negotiation
-    S->>WS: 15.offer
-    WS->>P: offer
-    P->>WS: 16.answer
-    WS->>S: answer
+    %% WebRTC Negotiation with Wilbur-specific fields
+    rect rgb(240, 240, 255)
+        S->>WS: 14.offer (with SDP, multiplex:true, scalabilityMode:L1T1)
+        WS->>P: offer
+        P->>WS: 15.layerPreference (spatialLayer:0, temporalLayer:0)
+        P->>WS: 16.answer (with SDP, minBitrateBps:0, maxBitrateBps:0) 
+        WS->>S: answer
+    end
     
     %% ICE Candidate Exchange
     P->>WS: 17.iceCandidate
@@ -49,10 +57,11 @@ sequenceDiagram
     S-->>P: Media Stream
     P-->>S: Data Channel (Optional)
 
-    %% New Wilbur-Specific Logging and Message Handling
-    opt Logging and Message Handling
-        note over S,WS: Logs are structured JSON
-        note over S,WS: Messages not echoed to terminal by default, controlled by `--console_messages`
+    %% Wilbur-specific Logging and Message Handling
+    rect rgb(240, 240, 255)
+        note over WS: Timestamp format: [HH:MM:SS.SSS]
+        note over WS: Structured logs with info: prefix
+        note over WS: Direction indicators: >, <
     end
 
     %% Disconnect Scenarios
@@ -62,25 +71,16 @@ sequenceDiagram
         WS-->>SFU: playerDisconnected
     end
 
-    opt 21.Streamer Disconnects
-        S->>WS: Close Connection
-        WS->>P: streamerDisconnected
-        WS-->>SFU: streamerDisconnected
+    %% Health Checks with specific format
+    loop 21.Keep Alive
+        WS->>S: ping (type:ping, time:epoch)
+        S->>WS: pong (type:pong, time:echoed_epoch)
     end
 
-    %% Health Checks
-    loop 22.Keep Alive
-        S->>WS: ping
-        WS->>S: pong
+    %% Additional Wilbur-Specific Features
+    rect rgb(240, 240, 255)
+        note over WS: Console message verbosity control
+        note over WS: REST API with explicit enablement
+        note over WS: HTTPS redirect capability
     end
-
-    %% Additional Wilbur-Specific Steps
-    opt Web Serving
-        note over WS: Web serving disabled by default, enabled with `--serve`
-    end
-
-    opt REST API
-        note over WS: REST API can be enabled and accessed at `<server_url>/api/api-definition`
-    end
-
 ```
